@@ -1,0 +1,1198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hospital Digital Twin System</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+:root {
+  --bg: #050810;
+  --bg2: #090d18;
+  --bg3: #0d1220;
+  --panel: #0f1628;
+  --panel2: #141c30;
+  --border: rgba(100,130,255,0.12);
+  --border2: rgba(100,130,255,0.22);
+  --accent: #4f7fff;
+  --accent2: #7c9fff;
+  --cyan: #00d4c8;
+  --amber: #f59e0b;
+  --red: #ef4444;
+  --orange: #f97316;
+  --green: #22c55e;
+  --purple: #a78bfa;
+  --text: #e2e8f0;
+  --text2: #94a3b8;
+  --text3: #64748b;
+  --immediate: #ef4444;
+  --urgent: #f97316;
+  --semi: #f59e0b;
+  --routine: #22c55e;
+  --glow-blue: 0 0 20px rgba(79,127,255,0.3);
+  --glow-red: 0 0 20px rgba(239,68,68,0.4);
+  --glow-green: 0 0 20px rgba(34,197,94,0.3);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Syne', sans-serif;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+.mono { font-family: 'JetBrains Mono', monospace; }
+
+/* Grid noise background */
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background-image:
+    linear-gradient(rgba(79,127,255,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(79,127,255,0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none; z-index: 0;
+}
+
+/* === HEADER === */
+header {
+  position: relative; z-index: 10;
+  padding: 16px 32px;
+  display: flex; align-items: center; justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(180deg, rgba(5,8,16,0.98) 0%, rgba(9,13,24,0.95) 100%);
+  backdrop-filter: blur(12px);
+}
+.logo-area { display: flex; align-items: center; gap: 16px; }
+.logo-mark {
+  width: 44px; height: 44px;
+  background: linear-gradient(135deg, rgba(79,127,255,0.2), rgba(0,212,200,0.2));
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: var(--glow-blue);
+}
+.logo-mark svg { width: 24px; height: 24px; }
+.sys-title { font-size: 18px; font-weight: 800; letter-spacing: -0.5px; }
+.sys-title span { color: var(--accent); }
+.sys-sub { font-size: 11px; color: var(--text3); font-family: 'JetBrains Mono'; text-transform: uppercase; letter-spacing: 1px; margin-top: 2px; }
+
+.header-meta { display: flex; align-items: center; gap: 24px; }
+.live-badge {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 14px; border-radius: 20px;
+  background: rgba(34,197,94,0.1); border: 1px solid rgba(34,197,94,0.3);
+  font-size: 12px; font-weight: 600; color: var(--green);
+  font-family: 'JetBrains Mono';
+}
+.live-dot {
+  width: 7px; height: 7px; border-radius: 50%; background: var(--green);
+  animation: pulse-dot 1.5s ease-in-out infinite;
+}
+@keyframes pulse-dot {
+  0%,100% { opacity:1; box-shadow: 0 0 0 0 rgba(34,197,94,0.5); }
+  50% { opacity:0.7; box-shadow: 0 0 0 4px rgba(34,197,94,0); }
+}
+.tick-counter { font-family: 'JetBrains Mono'; font-size: 13px; color: var(--text2); }
+.tick-counter span { color: var(--accent2); font-weight: 500; }
+
+/* === MAIN LAYOUT === */
+.app-body { position: relative; z-index: 1; display: flex; height: calc(100vh - 73px); }
+
+/* === SIDEBAR === */
+.sidebar {
+  width: 340px; flex-shrink: 0;
+  background: var(--bg2);
+  border-right: 1px solid var(--border);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.sidebar-header {
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.sidebar-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 1.5px; color: var(--text3); }
+.sort-label { font-family: 'JetBrains Mono'; font-size: 10px; color: var(--accent); background: rgba(79,127,255,0.1); padding: 2px 8px; border-radius: 4px; border: 1px solid rgba(79,127,255,0.2); }
+
+.patient-list { flex: 1; overflow-y: auto; padding: 8px 0; }
+.patient-list::-webkit-scrollbar { width: 4px; }
+.patient-list::-webkit-scrollbar-track { background: transparent; }
+.patient-list::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+.patient-row {
+  padding: 10px 20px;
+  cursor: pointer;
+  transition: background 0.15s;
+  border-left: 2px solid transparent;
+  position: relative;
+}
+.patient-row:hover { background: var(--panel); }
+.patient-row.active {
+  background: var(--panel);
+  border-left-color: var(--accent);
+}
+.patient-row.severity-IMMEDIATE { border-left-color: var(--immediate); }
+.patient-row.severity-URGENT { border-left-color: var(--urgent); }
+.patient-row.severity-SEMI_URGENT { border-left-color: var(--semi); }
+.patient-row.severity-ROUTINE { border-left-color: var(--routine); }
+.patient-row.active.severity-IMMEDIATE { border-left-color: var(--immediate); }
+.patient-row.active.severity-URGENT { border-left-color: var(--urgent); }
+
+.pr-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px; }
+.pr-id { font-family: 'JetBrains Mono'; font-size: 12px; color: var(--text3); }
+.pr-name { font-size: 13px; font-weight: 600; color: var(--text); }
+.pr-dps {
+  font-family: 'JetBrains Mono'; font-size: 14px; font-weight: 500;
+}
+.pr-bottom { display: flex; align-items: center; gap: 8px; }
+.sev-pill {
+  font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;
+  padding: 2px 7px; border-radius: 3px;
+}
+.sev-IMMEDIATE { background: rgba(239,68,68,0.15); color: var(--immediate); border: 1px solid rgba(239,68,68,0.3); }
+.sev-URGENT { background: rgba(249,115,22,0.15); color: var(--orange); border: 1px solid rgba(249,115,22,0.3); }
+.sev-SEMI_URGENT { background: rgba(245,158,11,0.12); color: var(--amber); border: 1px solid rgba(245,158,11,0.25); }
+.sev-ROUTINE { background: rgba(34,197,94,0.1); color: var(--green); border: 1px solid rgba(34,197,94,0.25); }
+.traj-icon { font-family: 'JetBrains Mono'; font-size: 11px; }
+.traj-DET { color: var(--red); }
+.traj-IMP { color: var(--green); }
+.pr-bed { font-size: 11px; color: var(--text3); font-family: 'JetBrains Mono'; margin-left: auto; }
+
+.dps-bar { height: 2px; background: var(--border); border-radius: 1px; margin-top: 6px; overflow: hidden; }
+.dps-fill { height: 100%; border-radius: 1px; transition: width 0.5s; }
+
+/* === MAIN PANEL === */
+.main-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+/* === PATIENT DETAIL === */
+.detail-area {
+  flex: 1; overflow-y: auto; padding: 24px;
+  display: grid; grid-template-columns: 1fr 1fr 1fr; grid-template-rows: auto auto auto; gap: 16px;
+}
+.detail-area::-webkit-scrollbar { width: 4px; }
+.detail-area::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+.card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  position: relative; overflow: hidden;
+}
+.card::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(79,127,255,0.4), transparent);
+}
+.card-title {
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px;
+  color: var(--text3); margin-bottom: 16px; display: flex; align-items: center; gap: 6px;
+}
+.card-title-dot { width: 5px; height: 5px; border-radius: 50%; }
+
+/* Patient header card (spans all 3 cols) */
+.patient-header-card {
+  grid-column: 1 / -1;
+  background: linear-gradient(135deg, var(--panel) 0%, rgba(15,22,40,0.9) 100%);
+  border: 1px solid var(--border2);
+  display: flex; align-items: center; gap: 32px; padding: 24px 32px;
+}
+.ph-id-block { flex-shrink: 0; }
+.ph-id { font-family: 'JetBrains Mono'; font-size: 28px; font-weight: 500; color: var(--accent2); }
+.ph-condition { font-size: 22px; font-weight: 800; margin-top: 4px; text-transform: capitalize; }
+.ph-meta { font-family: 'JetBrains Mono'; font-size: 12px; color: var(--text3); margin-top: 4px; }
+
+.ph-scores { display: flex; gap: 24px; margin-left: auto; flex-shrink: 0; }
+.score-block { text-align: center; }
+.score-val { font-family: 'JetBrains Mono'; font-size: 28px; font-weight: 500; }
+.score-lbl { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--text3); margin-top: 2px; }
+
+.ph-dps-block { flex-shrink: 0; text-align: center; padding: 16px 24px; background: rgba(79,127,255,0.08); border: 1px solid rgba(79,127,255,0.2); border-radius: 10px; }
+.ph-dps-val { font-family: 'JetBrains Mono'; font-size: 48px; font-weight: 400; line-height: 1; }
+.ph-dps-lbl { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; color: var(--text3); margin-top: 6px; }
+.ph-sev-badge {
+  display: inline-block; font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 1px; padding: 4px 12px; border-radius: 4px; margin-top: 8px;
+}
+
+/* Vitals card */
+.vitals-card { grid-column: 1 / 3; }
+.vitals-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+.vital-item {
+  background: var(--bg3); border: 1px solid var(--border); border-radius: 8px;
+  padding: 12px 14px;
+}
+.vital-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: var(--text3); margin-bottom: 6px; }
+.vital-value { font-family: 'JetBrains Mono'; font-size: 22px; font-weight: 400; }
+.vital-unit { font-size: 11px; color: var(--text3); }
+.vital-trend { font-size: 11px; margin-top: 4px; font-family: 'JetBrains Mono'; }
+.alarm-CRITICAL .vital-value { color: var(--red); }
+.alarm-WARNING .vital-value { color: var(--amber); }
+.alarm-NORMAL .vital-value { color: var(--green); }
+
+/* Scores radar card */
+.scores-card { }
+.scores-bars { display: flex; flex-direction: column; gap: 10px; }
+.score-bar-row { display: flex; align-items: center; gap: 10px; }
+.score-bar-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text3); width: 56px; flex-shrink: 0; font-family: 'JetBrains Mono'; }
+.score-bar-track { flex: 1; height: 6px; background: var(--bg3); border-radius: 3px; overflow: hidden; }
+.score-bar-fill { height: 100%; border-radius: 3px; transition: width 0.6s ease; }
+.score-bar-val { font-family: 'JetBrains Mono'; font-size: 12px; color: var(--text); width: 36px; text-align: right; }
+
+/* Timeline chart card (spans 2 cols) */
+.timeline-card { grid-column: 1 / 3; }
+.chart-wrap { position: relative; height: 140px; }
+
+/* Labs & Observations */
+.labs-card { }
+.labs-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.lab-item { background: var(--bg3); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; }
+.lab-name { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 3px; font-family: 'JetBrains Mono'; }
+.lab-val { font-family: 'JetBrains Mono'; font-size: 14px; font-weight: 500; }
+
+/* Medications */
+.meds-card { }
+.med-tag {
+  display: inline-block; margin: 3px; padding: 4px 10px; border-radius: 4px;
+  font-size: 11px; font-family: 'JetBrains Mono';
+  background: rgba(79,127,255,0.1); border: 1px solid rgba(79,127,255,0.25); color: var(--accent2);
+}
+
+/* === RESOURCE + EVENTS PANEL (RIGHT SIDEBAR) === */
+.right-panel {
+  width: 300px; flex-shrink: 0;
+  background: var(--bg2);
+  border-left: 1px solid var(--border);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.right-section { border-bottom: 1px solid var(--border); padding: 16px 18px; }
+.right-section-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; color: var(--text3); margin-bottom: 12px; }
+
+.resource-item { margin-bottom: 14px; }
+.resource-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px; }
+.resource-name { font-size: 13px; font-weight: 600; }
+.resource-ratio { font-family: 'JetBrains Mono'; font-size: 12px; }
+.resource-track { height: 6px; background: var(--bg3); border-radius: 3px; overflow: hidden; }
+.resource-fill { height: 100%; border-radius: 3px; transition: width 0.5s; }
+.resource-occupants { font-size: 10px; font-family: 'JetBrains Mono'; color: var(--text3); margin-top: 4px; }
+
+.events-list { flex: 1; overflow-y: auto; padding: 16px 18px; }
+.events-list::-webkit-scrollbar { width: 3px; }
+.events-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+.event-item {
+  padding: 8px 10px; margin-bottom: 8px;
+  border-radius: 6px; border-left: 2px solid;
+  background: var(--bg3);
+  font-size: 11px; font-family: 'JetBrains Mono'; line-height: 1.5;
+}
+.event-item.ev-clinical { border-left-color: var(--amber); }
+.event-item.ev-decision { border-left-color: var(--accent); }
+.event-tick { color: var(--text3); margin-bottom: 2px; }
+.event-action { font-weight: 500; }
+.ev-clinical .event-action { color: var(--amber); }
+.ev-decision .event-action { color: var(--accent2); }
+
+/* === BOTTOM STATUS BAR === */
+.status-bar {
+  position: relative; z-index: 10;
+  padding: 8px 32px;
+  border-top: 1px solid var(--border);
+  background: var(--bg2);
+  display: flex; align-items: center; gap: 32px;
+  font-family: 'JetBrains Mono'; font-size: 11px; color: var(--text3);
+}
+.stat-group { display: flex; align-items: center; gap: 8px; }
+.stat-dot { width: 6px; height: 6px; border-radius: 50%; }
+.stat-count { color: var(--text); font-weight: 500; }
+.status-sep { color: var(--border2); }
+.sys-status { margin-left: auto; display: flex; align-items: center; gap: 6px; color: var(--green); }
+
+/* DPS colors */
+.dps-immediate { color: var(--immediate); }
+.dps-urgent { color: var(--orange); }
+.dps-semi { color: var(--amber); }
+.dps-routine { color: var(--green); }
+
+/* Animations */
+@keyframes slide-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+.animate-in { animation: slide-in 0.3s ease; }
+
+@keyframes sweep { from { opacity: 0; } to { opacity: 1; } }
+.data-refresh { animation: sweep 0.4s ease; }
+
+/* Scrollbar for main body */
+.detail-area::-webkit-scrollbar { width: 4px; }
+
+/* Nurse obs section in detail */
+.obs-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.obs-item { display: flex; flex-direction: column; gap: 2px; }
+.obs-label { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.5px; font-family: 'JetBrains Mono'; }
+.obs-val { font-family: 'JetBrains Mono'; font-size: 13px; font-weight: 500; }
+
+/* Divergence alerts */
+.div-alert {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 10px; border-radius: 5px; margin-bottom: 6px;
+  background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.2);
+  font-size: 11px; font-family: 'JetBrains Mono'; color: var(--text2);
+}
+.div-icon { color: var(--red); font-size: 12px; }
+
+/* Navigation tabs in detail */
+.detail-tabs { display: flex; gap: 1px; padding: 0 24px; border-bottom: 1px solid var(--border); }
+.detail-tab {
+  padding: 10px 20px; font-size: 12px; font-weight: 600; cursor: pointer;
+  color: var(--text3); border-bottom: 2px solid transparent; transition: all 0.15s;
+  text-transform: uppercase; letter-spacing: 0.5px;
+}
+.detail-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.detail-tab:hover:not(.active) { color: var(--text2); }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+  <div class="logo-area">
+    <div class="logo-mark">
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="#4f7fff" stroke-width="1.5" stroke-linejoin="round"/>
+        <path d="M2 17L12 22L22 17" stroke="#00d4c8" stroke-width="1.5" stroke-linejoin="round"/>
+        <path d="M2 12L12 17L22 12" stroke="#4f7fff" stroke-width="1.5" stroke-linejoin="round" opacity="0.5"/>
+      </svg>
+    </div>
+    <div>
+      <div class="sys-title">Hospital <span>Digital Twin</span> System</div>
+      <div class="sys-sub">DPS · NEWS2 · SOFA · Resource Scheduler</div>
+    </div>
+  </div>
+  <div class="header-meta">
+    <div class="tick-counter mono">Tick <span id="tick-display">T001</span> · <span id="sim-time">00:01</span></div>
+    <div id="live-badge" class="live-badge"><div class="live-dot"></div> SYNC LIVE</div>
+  </div>
+</header>
+
+<div class="app-body">
+
+<!-- LEFT: PATIENT QUEUE -->
+<aside class="sidebar">
+  <div class="sidebar-header">
+    <div class="sidebar-title">Patient Queue</div>
+    <div class="sort-label">↓ DPS</div>
+  </div>
+  <div class="patient-list" id="patient-list"></div>
+</aside>
+
+<!-- MAIN: DETAIL + TABS -->
+<main class="main-panel">
+  <div class="detail-tabs">
+    <div class="detail-tab active" onclick="switchTab('vitals')">Vitals & Scores</div>
+    <div class="detail-tab" onclick="switchTab('labs')">Labs & Obs</div>
+    <div class="detail-tab" onclick="switchTab('history')">Trend History</div>
+    <div class="detail-tab" onclick="switchTab('info')">Imaging & Meds</div>
+  </div>
+  <div class="detail-area" id="detail-area"></div>
+</main>
+
+<!-- RIGHT: RESOURCES & EVENTS -->
+<aside class="right-panel">
+  <div class="right-section">
+    <div class="right-section-title">Resource Utilisation</div>
+    <div id="resource-panel"></div>
+  </div>
+  <div class="right-section" style="border-bottom:none; flex:1; display:flex; flex-direction:column; overflow:hidden; padding-bottom:0;">
+    <div class="right-section-title" style="margin-bottom:8px;">Events & Decisions</div>
+    <div class="events-list" id="events-panel"></div>
+  </div>
+</aside>
+
+</div>
+
+<!-- BOTTOM STATUS BAR -->
+<div class="status-bar">
+  <div class="stat-group"><div class="stat-dot" style="background:var(--immediate)"></div>IMMEDIATE: <span class="stat-count" id="cnt-imm">0</span></div>
+  <div class="stat-group"><div class="stat-dot" style="background:var(--orange)"></div>URGENT: <span class="stat-count" id="cnt-urg">0</span></div>
+  <div class="stat-group"><div class="stat-dot" style="background:var(--amber)"></div>SEMI-URGENT: <span class="stat-count" id="cnt-semi">0</span></div>
+  <div class="stat-group"><div class="stat-dot" style="background:var(--green)"></div>ROUTINE: <span class="stat-count" id="cnt-rout">0</span></div>
+  <span class="status-sep">|</span>
+  <span>Decisions: <span class="stat-count" id="cnt-dec">0</span></span>
+  <span class="status-sep">|</span>
+  <span>Tick: <span class="stat-count" id="cnt-tick">0</span></span>
+  <div class="sys-status">
+    <div class="live-dot"></div> Sync: LIVE ✓
+  </div>
+</div>
+
+<script>
+// ============================================================
+// SIMULATION ENGINE (JS port of the Python system)
+// ============================================================
+
+const VITAL_RANGES = {
+  HR:     [40, 50, 100, 130],
+  BP_sys: [70, 90, 140, 180],
+  SpO2:   [85, 92, 99, 100],
+  RR:     [6, 9, 20, 25],
+  Temp:   [35.0, 36.0, 38.0, 39.5],
+  GCS:    [3, 8, 14, 15],
+};
+
+const PROFILES = {
+  cardiac:            { HR:[100,120],BP_sys:[85,100],SpO2:[91,95],RR:[20,24],Temp:[37.0,37.8],GCS:[13,15],on_O2:true,troponin:[1.5,4.0],creatinine:[1.0,1.8],lactate:[1.8,3.0],platelets:[150,250],WBC:[8,14],bilirubin:[0.8,1.5],det:0.60,rec:0.40,lab_delay:25,pain:8,severity:'URGENT',imaging:'ST-elevation on ECG. Mild pulmonary congestion on CXR.',ecg:true,cxr:true,ct:false },
+  sepsis:             { HR:[105,125],BP_sys:[80,95],SpO2:[90,94],RR:[22,26],Temp:[38.5,39.5],GCS:[12,15],on_O2:false,troponin:[0.1,0.5],creatinine:[1.5,2.5],lactate:[2.0,4.5],platelets:[60,140],WBC:[15,28],bilirubin:[1.2,2.5],det:0.75,rec:0.25,lab_delay:30,pain:6,severity:'URGENT',imaging:'Bilateral infiltrates on CXR.',ecg:false,cxr:true,ct:false },
+  respiratory:        { HR:[95,115],BP_sys:[95,115],SpO2:[85,93],RR:[24,30],Temp:[37.5,38.5],GCS:[14,15],on_O2:true,troponin:[0.0,0.2],creatinine:[0.8,1.2],lactate:[1.0,2.0],platelets:[180,280],WBC:[10,18],bilirubin:[0.5,1.0],det:0.55,rec:0.35,lab_delay:30,pain:5,severity:'URGENT',imaging:'Consolidation right lower lobe.',ecg:false,cxr:true,ct:true },
+  stroke:             { HR:[88,110],BP_sys:[160,200],SpO2:[92,97],RR:[16,22],Temp:[37.0,38.0],GCS:[6,12],on_O2:true,troponin:[0.0,0.3],creatinine:[0.9,1.4],lactate:[1.2,2.2],platelets:[150,280],WBC:[8,14],bilirubin:[0.4,1.0],det:0.80,rec:0.15,lab_delay:20,pain:4,severity:'URGENT',imaging:'CT head: hyperdense MCA sign.',ecg:true,cxr:false,ct:true },
+  pulmonary_embolism: { HR:[110,135],BP_sys:[85,105],SpO2:[82,91],RR:[24,32],Temp:[37.0,37.8],GCS:[13,15],on_O2:true,troponin:[0.3,1.2],creatinine:[0.9,1.5],lactate:[1.5,3.0],platelets:[140,240],WBC:[8,13],bilirubin:[0.5,1.2],det:0.85,rec:0.30,lab_delay:20,pain:9,severity:'URGENT',imaging:'CTPA: large bilateral pulmonary emboli.',ecg:true,cxr:true,ct:true },
+  trauma:             { HR:[115,140],BP_sys:[70,90],SpO2:[90,95],RR:[22,30],Temp:[35.5,37.0],GCS:[9,14],on_O2:true,troponin:[0.1,0.8],creatinine:[1.0,2.0],lactate:[3.0,6.0],platelets:[80,160],WBC:[12,20],bilirubin:[0.5,1.5],det:0.90,rec:0.50,lab_delay:15,pain:10,severity:'URGENT',imaging:'FAST: free fluid abdomen. Splenic laceration.',ecg:false,cxr:true,ct:true },
+  acute_kidney_failure:{ HR:[85,105],BP_sys:[100,130],SpO2:[93,97],RR:[18,24],Temp:[37.0,38.2],GCS:[12,15],on_O2:false,troponin:[0.1,0.5],creatinine:[3.0,6.0],lactate:[1.5,2.5],platelets:[120,200],WBC:[10,16],bilirubin:[0.8,2.0],det:0.65,rec:0.30,lab_delay:30,pain:5,severity:'SEMI_URGENT',imaging:'Bilateral renal cortical thinning on USS.',ecg:false,cxr:false,ct:false },
+  dka:                { HR:[100,120],BP_sys:[90,110],SpO2:[93,97],RR:[22,28],Temp:[36.5,37.5],GCS:[10,14],on_O2:false,troponin:[0.0,0.2],creatinine:[1.2,2.5],lactate:[1.5,3.0],platelets:[200,300],WBC:[12,18],bilirubin:[0.4,1.0],det:0.55,rec:0.60,lab_delay:20,pain:6,severity:'SEMI_URGENT',imaging:'No acute imaging findings.',ecg:false,cxr:false,ct:false },
+  pneumonia:          { HR:[90,110],BP_sys:[100,130],SpO2:[90,95],RR:[20,26],Temp:[38.0,39.5],GCS:[13,15],on_O2:true,troponin:[0.0,0.2],creatinine:[0.8,1.4],lactate:[1.0,2.0],platelets:[150,280],WBC:[12,20],bilirubin:[0.5,1.2],det:0.50,rec:0.40,lab_delay:30,pain:4,severity:'SEMI_URGENT',imaging:'Right lower lobe consolidation on CXR.',ecg:false,cxr:true,ct:false },
+  liver_failure:      { HR:[90,115],BP_sys:[90,120],SpO2:[92,97],RR:[18,24],Temp:[37.5,39.0],GCS:[8,13],on_O2:false,troponin:[0.0,0.4],creatinine:[0.8,1.5],lactate:[1.5,3.5],platelets:[50,120],WBC:[8,15],bilirubin:[3.0,8.0],det:0.70,rec:0.20,lab_delay:25,pain:5,severity:'SEMI_URGENT',imaging:'USS: shrunken liver, ascites.',ecg:false,cxr:false,ct:true },
+  cardiac_failure:    { HR:[90,110],BP_sys:[90,120],SpO2:[90,95],RR:[20,26],Temp:[36.5,37.5],GCS:[13,15],on_O2:true,troponin:[0.2,0.8],creatinine:[1.0,2.0],lactate:[1.0,2.5],platelets:[150,250],WBC:[8,14],bilirubin:[0.8,2.0],det:0.60,rec:0.35,lab_delay:30,pain:6,severity:'SEMI_URGENT',imaging:'CXR: cardiomegaly, pulmonary oedema.',ecg:true,cxr:true,ct:false },
+  hypertensive_crisis:{ HR:[80,100],BP_sys:[180,220],SpO2:[93,97],RR:[16,22],Temp:[36.5,37.5],GCS:[12,15],on_O2:false,troponin:[0.1,0.5],creatinine:[1.2,2.5],lactate:[1.0,2.0],platelets:[150,250],WBC:[8,14],bilirubin:[0.5,1.2],det:0.45,rec:0.60,lab_delay:30,pain:7,severity:'SEMI_URGENT',imaging:'No acute imaging.',ecg:true,cxr:false,ct:false },
+  mild_infection:     { HR:[80,95],BP_sys:[115,135],SpO2:[95,99],RR:[14,18],Temp:[37.8,38.8],GCS:[14,15],on_O2:false,troponin:[0.0,0.1],creatinine:[0.7,1.2],lactate:[0.8,1.5],platelets:[200,350],WBC:[10,16],bilirubin:[0.3,0.8],det:0.20,rec:0.70,lab_delay:40,pain:3,severity:'ROUTINE',imaging:'No significant findings.',ecg:false,cxr:false,ct:false },
+  post_surgery_recovery:{ HR:[70,90],BP_sys:[110,135],SpO2:[94,98],RR:[14,18],Temp:[36.8,37.8],GCS:[14,15],on_O2:false,troponin:[0.0,0.3],creatinine:[0.6,1.1],lactate:[0.5,1.2],platelets:[150,280],WBC:[8,14],bilirubin:[0.3,0.8],det:0.15,rec:0.80,lab_delay:45,pain:5,severity:'ROUTINE',imaging:'Post-op changes only.',ecg:false,cxr:true,ct:false },
+};
+
+const CONDITION_MEDS = {
+  cardiac:['Aspirin 300mg','GTN spray','Heparin infusion','Metoprolol 25mg'],
+  sepsis:['Piperacillin-tazobactam','Vancomycin','IV fluids 500mL','Noradrenaline'],
+  respiratory:['Salbutamol nebuliser','Prednisolone 40mg','CPAP therapy'],
+  stroke:['Alteplase tPA','Aspirin 300mg','Atorvastatin 80mg'],
+  pulmonary_embolism:['Heparin bolus','Alteplase tPA','Low-mol-weight heparin'],
+  trauma:['O-neg blood','Tranexamic acid','IV morphine','Noradrenaline'],
+  acute_kidney_failure:['Furosemide 80mg','IV fluids','Potassium restriction'],
+  dka:['Insulin infusion','IV fluids 1L/hr','Potassium replacement'],
+  pneumonia:['Amoxicillin-clavulanate','Azithromycin','O2 therapy'],
+  liver_failure:['Lactulose 30mL','N-acetylcysteine','Terlipressin'],
+  cardiac_failure:['Furosemide 40mg','Ramipril 5mg','Spironolactone'],
+  hypertensive_crisis:['Labetalol IV','GTN infusion','Amlodipine'],
+  mild_infection:['Amoxicillin 500mg','Paracetamol 1g'],
+  post_surgery_recovery:['Paracetamol 1g','Ibuprofen 400mg','Enoxaparin'],
+};
+
+function rnd(lo, hi) { return lo + Math.random() * (hi - lo); }
+function rndInt(lo, hi) { return Math.floor(rnd(lo, hi+1)); }
+
+function generatePatient(id, conditionKey) {
+  const p = PROFILES[conditionKey];
+  const age = rndInt(35, 85);
+  const ageFactor = 1 + (age - 50) * 0.004;
+  return {
+    id, condition: conditionKey, severity: p.severity, age,
+    vitals: {
+      HR: rnd(...p.HR), BP_sys: rnd(...p.BP_sys), SpO2: rnd(...p.SpO2),
+      RR: rnd(...p.RR), Temp: rnd(...p.Temp), GCS: rndInt(...p.GCS), on_O2: p.on_O2,
+    },
+    labs: {
+      troponin: rnd(...p.troponin), creatinine: rnd(...p.creatinine),
+      lactate: rnd(...p.lactate), platelets: rnd(...p.platelets),
+      WBC: rnd(...p.WBC), bilirubin: rnd(...p.bilirubin),
+      labs_available: true, lab_delay: p.lab_delay,
+    },
+    nurse_obs: {
+      pain_score: p.pain + rndInt(-1,1),
+      consciousness: rndInt(10,15) >= 13 ? 'alert' : 'confused',
+      urine_output_ml: rndInt(10, 80),
+      skin_color: ['normal','pale','flushed'][rndInt(0,2)],
+      sweating: Math.random() > 0.6,
+    },
+    imaging: { chest_xray: p.cxr, ct_scan: p.ct, ecg_abnormal: p.ecg, findings: p.imaging },
+    medications: [...(CONDITION_MEDS[conditionKey]||[])],
+    improving: Math.random() < p.rec,
+    deterioration_rate: p.det * ageFactor,
+    recovery_rate: p.rec / ageFactor,
+    scores: { news2: null, sofa: null, qsofa: null, mews: null, rothman: null, dps: null },
+    history: [],
+    events: [],
+  };
+}
+
+function tickUpdate(p) {
+  const noise = (s) => s + (Math.random() - 0.5) * s * 0.04;
+  const v = p.vitals;
+  let event = null;
+
+  if (p.improving) {
+    v.HR = Math.max(55, noise(v.HR) * (1 - p.recovery_rate * 0.03));
+    v.SpO2 = Math.min(99, noise(v.SpO2) * (1 + p.recovery_rate * 0.02));
+    v.BP_sys = noise(v.BP_sys);
+    v.RR = Math.max(10, noise(v.RR) * (1 - p.recovery_rate * 0.02));
+    v.GCS = Math.min(15, v.GCS + (Math.random() > 0.85 ? 1 : 0));
+    v.Temp = Math.max(36.0, v.Temp - p.recovery_rate * 0.05 + (Math.random()-0.5)*0.1);
+  } else {
+    v.HR = Math.min(160, noise(v.HR) * (1 + p.deterioration_rate * 0.015));
+    v.SpO2 = Math.max(70, noise(v.SpO2) * (1 - p.deterioration_rate * 0.01));
+    v.BP_sys = Math.max(50, noise(v.BP_sys) * (1 - p.deterioration_rate * 0.01));
+    v.RR = Math.min(40, noise(v.RR) * (1 + p.deterioration_rate * 0.015));
+    v.GCS = Math.max(3, v.GCS - (Math.random() > 0.9 ? 1 : 0));
+    v.Temp = v.Temp + p.deterioration_rate * 0.04 + (Math.random()-0.5)*0.15;
+  }
+
+  // Random clinical event
+  if (Math.random() < 0.04) {
+    const evts = ['Sudden SpO2 drop','Fever spike','BP crash','Tachycardia episode','GCS deterioration','Agitation episode'];
+    event = evts[rndInt(0, evts.length-1)] + ` — ${p.id} (${p.condition})`;
+    p.events.push(event);
+  }
+
+  // Flip improving status
+  if (Math.random() < 0.03) p.improving = !p.improving;
+
+  return event;
+}
+
+// ── NEWS2 ──
+function computeNEWS2(snap) {
+  let s = 0;
+  const spo2 = snap.vitals.SpO2;
+  const on_o2 = snap.vitals.on_O2;
+  if (!on_o2) {
+    if (spo2 <= 91) s+=3; else if (spo2 <= 93) s+=2; else if (spo2 <= 94) s+=1;
+  } else {
+    if (spo2 <= 83) s+=3; else if (spo2 <= 85) s+=2; else if (spo2 <= 87) s+=1; else if (spo2 >= 97) s+=3;
+  }
+  if (on_o2) s+=2;
+  const rr = snap.vitals.RR;
+  if (rr <= 8) s+=3; else if (rr <= 11) s+=1; else if (rr <= 20) s+=0; else if (rr <= 24) s+=2; else s+=3;
+  const temp = snap.vitals.Temp;
+  if (temp <= 35.0) s+=3; else if (temp <= 36.0) s+=1; else if (temp <= 38.0) s+=0; else if (temp <= 39.0) s+=1; else s+=2;
+  const bp = snap.vitals.BP_sys;
+  if (bp <= 90) s+=3; else if (bp <= 100) s+=2; else if (bp <= 110) s+=1; else if (bp <= 219) s+=0; else s+=3;
+  const hr = snap.vitals.HR;
+  if (hr <= 40) s+=3; else if (hr <= 50) s+=1; else if (hr <= 90) s+=0; else if (hr <= 110) s+=1; else if (hr <= 130) s+=2; else s+=3;
+  const gcs = snap.vitals.GCS;
+  if (gcs >= 15) s+=0; else if (gcs >= 13) s+=3; else s+=3;
+  return Math.min(20, s);
+}
+
+function computeSOFA(snap) {
+  const v = snap.vitals; const l = snap.labs;
+  let s = 0;
+  const pf = (v.SpO2 < 92 && v.on_O2) ? 200 : (v.SpO2 >= 96 ? 400 : 300);
+  if (pf < 100) s+=4; else if (pf < 200) s+=3; else if (pf < 300) s+=2; else if (pf < 400) s+=1;
+  if (l.platelets < 20) s+=4; else if (l.platelets < 50) s+=3; else if (l.platelets < 100) s+=2; else if (l.platelets < 150) s+=1;
+  const bil = l.bilirubin;
+  if (bil >= 12) s+=4; else if (bil >= 6) s+=3; else if (bil >= 2) s+=2; else if (bil >= 1.2) s+=1;
+  if (v.BP_sys < 70) s+=4; else if (v.BP_sys < 90) s+=3; else if (v.BP_sys < 100) s+=2; else if (v.BP_sys < 110) s+=1;
+  if (v.GCS < 6) s+=4; else if (v.GCS < 10) s+=3; else if (v.GCS < 13) s+=2; else if (v.GCS < 15) s+=1;
+  if (l.creatinine > 5.0) s+=4; else if (l.creatinine > 3.5) s+=3; else if (l.creatinine > 2.0) s+=2; else if (l.creatinine > 1.2) s+=1;
+  return Math.min(24, s);
+}
+
+function computeqSOFA(snap) {
+  let s = 0;
+  if (snap.vitals.RR >= 22) s++;
+  if (snap.vitals.GCS < 15) s++;
+  if (snap.vitals.BP_sys <= 100) s++;
+  return s;
+}
+
+function computeMEWS(snap) {
+  const v = snap.vitals; let s = 0;
+  const hr = v.HR;
+  if (hr < 40 || hr > 129) s+=3; else if (hr < 50 || hr > 110) s+=2; else if (hr < 55 || hr > 100) s+=1;
+  const rr = v.RR;
+  if (rr < 9 || rr > 29) s+=3; else if (rr < 12 || rr > 24) s+=2; else if (rr > 20) s+=1;
+  const bp = v.BP_sys;
+  if (bp < 70) s+=3; else if (bp < 80) s+=2; else if (bp < 100) s+=1; else if (bp > 200) s+=2;
+  const t = v.Temp;
+  if (t < 35 || t > 39.5) s+=2; else if (t < 36 || t > 38.5) s+=1;
+  if (v.GCS < 9) s+=3; else if (v.GCS < 13) s+=2; else if (v.GCS < 15) s+=1;
+  return Math.min(14, s);
+}
+
+function computeRothman(snap) {
+  const v = snap.vitals; const l = snap.labs; let pts = 100;
+  if (v.HR > 130) pts -= 25; else if (v.HR > 110) pts -= 15; else if (v.HR > 100) pts -= 8; else if (v.HR < 50) pts -= 12;
+  if (v.BP_sys < 70) pts -= 30; else if (v.BP_sys < 90) pts -= 18; else if (v.BP_sys < 100) pts -= 10; else if (v.BP_sys > 180) pts -= 14;
+  if (v.SpO2 < 85) pts -= 30; else if (v.SpO2 < 90) pts -= 18; else if (v.SpO2 < 94) pts -= 8;
+  if (v.RR > 28) pts -= 22; else if (v.RR > 22) pts -= 12; else if (v.RR < 8) pts -= 18;
+  if (v.GCS < 9) pts -= 25; else if (v.GCS < 13) pts -= 15; else if (v.GCS < 15) pts -= 5;
+  if (v.Temp > 39.5) pts -= 15; else if (v.Temp > 38.5) pts -= 8; else if (v.Temp < 35) pts -= 20;
+  if (l.lactate > 4) pts -= 20; else if (l.lactate > 2) pts -= 10;
+  if (l.creatinine > 5) pts -= 18; else if (l.creatinine > 2) pts -= 8;
+  if (l.bilirubin > 8) pts -= 14; else if (l.bilirubin > 3) pts -= 6;
+  return Math.max(0, Math.min(100, pts));
+}
+
+function computeDPS(news2, sofa, qsofa, mews, rothman, waitBonus=0) {
+  const n = (news2/20)*30, sf = (sofa/24)*25, ri = ((100-rothman)/100)*20;
+  const qf = (qsofa/3)*10, mf = (mews/14)*10;
+  return Math.min(100, Math.max(0, n + sf + ri + qf + mf + waitBonus));
+}
+
+function computeAllScores(p) {
+  const snap = { vitals: p.vitals, labs: p.labs };
+  const news2 = computeNEWS2(snap);
+  const sofa = computeSOFA(snap);
+  const qsofa = computeqSOFA(snap);
+  const mews = computeMEWS(snap);
+  const rothman = computeRothman(snap);
+  const dps = computeDPS(news2, sofa, qsofa, mews, rothman);
+  return { news2, sofa, qsofa, mews, rothman, dps };
+}
+
+function getAlarmLevel(vital, val) {
+  if (val == null) return 'NORMAL';
+  const [lc, lw, hw, hc] = VITAL_RANGES[vital];
+  if (vital === 'SpO2' || vital === 'GCS') {
+    if (val <= lc) return 'CRITICAL';
+    if (val <= lw) return 'WARNING';
+    return 'NORMAL';
+  }
+  if (val <= lc || val >= hc) return 'CRITICAL';
+  if (val <= lw || val >= hw) return 'WARNING';
+  return 'NORMAL';
+}
+
+function dpsColor(dps) {
+  if (dps >= 75) return 'var(--immediate)';
+  if (dps >= 50) return 'var(--orange)';
+  if (dps >= 25) return 'var(--amber)';
+  return 'var(--green)';
+}
+
+function dpsClass(dps) {
+  if (dps >= 75) return 'dps-immediate';
+  if (dps >= 50) return 'dps-urgent';
+  if (dps >= 25) return 'dps-semi';
+  return 'dps-routine';
+}
+
+function dpsLabel(dps) {
+  if (dps >= 75) return 'IMMEDIATE';
+  if (dps >= 50) return 'URGENT';
+  if (dps >= 25) return 'SEMI-URGENT';
+  return 'ROUTINE';
+}
+
+// ── RESOURCE SCHEDULER ──
+const RESOURCES = {
+  ICU: { capacity: 2, occupants: new Set(), label: 'ICU Bed', dps_threshold: 75 },
+  HDU: { capacity: 4, occupants: new Set(), label: 'HDU Bed', dps_threshold: 50 },
+  WARD: { capacity: 8, occupants: new Set(), label: 'Ward Bed', dps_threshold: 0 },
+  CT: { capacity: 1, occupants: new Set(), label: 'CT Scanner', dps_threshold: 0 },
+  DOC: { capacity: 2, occupants: new Set(), label: 'Doctor', dps_threshold: 0 },
+};
+
+const PATIENT_BED = {};
+const PATIENT_DOC = new Set();
+const PATIENT_CT = new Set();
+const SCHEDULER_DECISIONS = [];
+
+function schedulerTick(patients, tick) {
+  const newDecisions = [];
+  const sorted = [...patients].sort((a,b) => (b.scores.dps||0) - (a.scores.dps||0));
+
+  for (const p of sorted) {
+    const dps = p.scores.dps || 0;
+    const pid = p.id;
+
+    // Bed allocation
+    if (!PATIENT_BED[pid]) {
+      if (dps >= 75 && RESOURCES.ICU.occupants.size < RESOURCES.ICU.capacity) {
+        RESOURCES.ICU.occupants.add(pid);
+        PATIENT_BED[pid] = 'ICU';
+        newDecisions.push({ tick, pid, action:'ADMIT', resource:'ICU Bed', reason:`DPS=${dps.toFixed(1)} → IMMEDIATE` });
+      } else if (dps >= 50 && RESOURCES.HDU.occupants.size < RESOURCES.HDU.capacity) {
+        RESOURCES.HDU.occupants.add(pid);
+        PATIENT_BED[pid] = 'HDU';
+        newDecisions.push({ tick, pid, action:'ADMIT', resource:'HDU Bed', reason:`DPS=${dps.toFixed(1)} → URGENT` });
+      } else if (RESOURCES.WARD.occupants.size < RESOURCES.WARD.capacity) {
+        RESOURCES.WARD.occupants.add(pid);
+        PATIENT_BED[pid] = 'WARD';
+        newDecisions.push({ tick, pid, action:'ADMIT', resource:'Ward Bed', reason:`DPS=${dps.toFixed(1)} → SEMI-URGENT` });
+      }
+    }
+
+    // Doctor assignment
+    if (dps >= 50 && !PATIENT_DOC.has(pid) && RESOURCES.DOC.occupants.size < RESOURCES.DOC.capacity) {
+      RESOURCES.DOC.occupants.add(pid);
+      PATIENT_DOC.add(pid);
+      newDecisions.push({ tick, pid, action:'ASSIGN', resource:'Doctor', reason:`DPS=${dps.toFixed(1)} — doctor assigned` });
+    }
+
+    // CT scanner
+    const CT_CONDITIONS = ['stroke','pulmonary_embolism','trauma','respiratory','liver_failure','acute_kidney_failure'];
+    if (CT_CONDITIONS.includes(p.condition) && !PATIENT_CT.has(pid) && RESOURCES.CT.occupants.size < RESOURCES.CT.capacity) {
+      RESOURCES.CT.occupants.add(pid);
+      PATIENT_CT.add(pid);
+      newDecisions.push({ tick, pid, action:'ASSIGN', resource:'CT Scanner', reason:`${p.condition} requires imaging, DPS=${dps.toFixed(1)}` });
+    }
+  }
+
+  SCHEDULER_DECISIONS.unshift(...newDecisions);
+  return newDecisions;
+}
+
+// ── INITIALISE PATIENTS ──
+const CONDITIONS = Object.keys(PROFILES);
+let patients = CONDITIONS.map((c, i) => generatePatient(`P-${1001+i}`, c));
+patients.forEach(p => {
+  p.scores = computeAllScores(p);
+  p.history = [];
+});
+
+let tick = 0;
+let selectedPatientId = patients[0]?.id;
+const CLINICAL_EVENTS = [];
+let activeTab = 'vitals';
+let vitalCharts = {};
+
+// ── RENDER FUNCTIONS ──
+function renderPatientList() {
+  const sorted = [...patients].sort((a,b) => (b.scores.dps||0) - (a.scores.dps||0));
+  const list = document.getElementById('patient-list');
+  list.innerHTML = sorted.map((p, i) => {
+    const dps = p.scores.dps || 0;
+    const sev = p.severity;
+    const color = dpsColor(dps);
+    const traj = p.improving ? 'IMP' : 'DET';
+    const bed = PATIENT_BED[p.id] || 'waiting';
+    const barWidth = Math.round(dps);
+    return `<div class="patient-row ${p.id === selectedPatientId ? 'active' : ''} severity-${sev}" onclick="selectPatient('${p.id}')">
+      <div class="pr-top">
+        <div>
+          <div class="pr-id mono">#${i+1} · ${p.id}</div>
+          <div class="pr-name">${p.condition.replace(/_/g,' ')}</div>
+        </div>
+        <div class="pr-dps ${dpsClass(dps)}">${dps.toFixed(1)}</div>
+      </div>
+      <div class="pr-bottom">
+        <span class="sev-pill sev-${sev}">${sev.replace('_','-')}</span>
+        <span class="traj-icon traj-${traj}">${traj === 'DET' ? '↓ DET' : '↑ IMP'}</span>
+        <span class="pr-bed">${bed}</span>
+      </div>
+      <div class="dps-bar"><div class="dps-fill" style="width:${barWidth}%;background:${color}"></div></div>
+    </div>`;
+  }).join('');
+}
+
+function renderResources() {
+  const panel = document.getElementById('resource-panel');
+  const resList = [
+    { key:'ICU', res: RESOURCES.ICU },
+    { key:'HDU', res: RESOURCES.HDU },
+    { key:'WARD', res: RESOURCES.WARD },
+    { key:'CT', res: RESOURCES.CT },
+    { key:'DOC', res: RESOURCES.DOC },
+  ];
+  panel.innerHTML = resList.map(({key, res}) => {
+    const pct = Math.round((res.occupants.size / res.capacity) * 100);
+    const color = pct >= 100 ? 'var(--red)' : pct >= 75 ? 'var(--amber)' : 'var(--green)';
+    const occ = [...res.occupants].join(', ') || '—';
+    return `<div class="resource-item">
+      <div class="resource-header">
+        <span class="resource-name">${res.label}</span>
+        <span class="resource-ratio mono" style="color:${color}">${res.occupants.size}/${res.capacity} · ${pct}%</span>
+      </div>
+      <div class="resource-track"><div class="resource-fill" style="width:${pct}%;background:${color}"></div></div>
+      <div class="resource-occupants">${occ}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderEvents() {
+  const panel = document.getElementById('events-panel');
+  const allEvts = [];
+
+  SCHEDULER_DECISIONS.slice(0, 12).forEach(d => {
+    allEvts.push({ type:'decision', tick: d.tick, text: `${d.action} ${d.pid} — ${d.reason}`, resource: d.resource });
+  });
+  CLINICAL_EVENTS.slice(0, 8).forEach(e => {
+    allEvts.push({ type:'clinical', tick: e.tick, text: e.event });
+  });
+  allEvts.sort((a,b) => b.tick - a.tick);
+
+  panel.innerHTML = allEvts.slice(0,16).map(e => `
+    <div class="event-item ev-${e.type}">
+      <div class="event-tick">T${String(e.tick).padStart(3,'0')}</div>
+      <div class="event-action">${e.type === 'decision' ? e.resource : '⚠ CLINICAL'}</div>
+      <div style="color:var(--text2);margin-top:2px">${e.text}</div>
+    </div>`).join('');
+}
+
+function renderDetailVitals(p) {
+  const v = p.vitals;
+  const sc = p.scores;
+  const bed = PATIENT_BED[p.id] || 'waiting';
+  const dps = sc.dps || 0;
+  const dpsCol = dpsColor(dps);
+
+  const vitalItems = [
+    { key:'HR', label:'Heart Rate', val: v.HR?.toFixed(0), unit:'bpm' },
+    { key:'BP_sys', label:'Systolic BP', val: v.BP_sys?.toFixed(0), unit:'mmHg' },
+    { key:'SpO2', label:'SpO₂', val: v.SpO2?.toFixed(1), unit:'%' },
+    { key:'RR', label:'Resp Rate', val: v.RR?.toFixed(0), unit:'br/min' },
+    { key:'Temp', label:'Temperature', val: v.Temp?.toFixed(1), unit:'°C' },
+    { key:'GCS', label:'GCS', val: v.GCS?.toFixed(0), unit:'/15' },
+  ];
+
+  const vitalHTML = vitalItems.map(vi => {
+    const alarm = getAlarmLevel(vi.key, parseFloat(vi.val));
+    return `<div class="vital-item alarm-${alarm}">
+      <div class="vital-label">${vi.label}</div>
+      <div class="vital-value">${vi.val}<span class="vital-unit"> ${vi.unit}</span></div>
+      <div class="vital-trend" style="color:${alarm==='CRITICAL'?'var(--red)':alarm==='WARNING'?'var(--amber)':'var(--text3)'}">
+        ${alarm === 'CRITICAL' ? '⚠ CRITICAL' : alarm === 'WARNING' ? '⚡ WARNING' : '✓ NORMAL'}
+      </div>
+    </div>`;
+  }).join('');
+
+  const scores = [
+    { label:'NEWS2', val: sc.news2?.toFixed(0)||'—', max:20, color:'#a78bfa' },
+    { label:'SOFA', val: sc.sofa?.toFixed(0)||'—', max:24, color:'#f97316' },
+    { label:'qSOFA', val: sc.qsofa?.toFixed(0)||'—', max:3, color:'#ef4444' },
+    { label:'MEWS', val: sc.mews?.toFixed(0)||'—', max:14, color:'#00d4c8' },
+    { label:'Rothman', val: sc.rothman?.toFixed(0)||'—', max:100, color:'#22c55e', invert:true },
+  ];
+
+  const scoresHTML = scores.map(s => {
+    const numVal = parseFloat(s.val) || 0;
+    const pct = s.invert ? Math.round((1 - numVal/s.max)*100) : Math.round((numVal/s.max)*100);
+    return `<div class="score-bar-row">
+      <div class="score-bar-label">${s.label}</div>
+      <div class="score-bar-track"><div class="score-bar-fill" style="width:${Math.min(100,pct)}%;background:${s.color}"></div></div>
+      <div class="score-bar-val">${s.val}</div>
+    </div>`;
+  }).join('');
+
+  const divAlerts = [];
+  const ranges = { HR:[50,130], BP_sys:[80,180], SpO2:[88,99], RR:[9,25], Temp:[35.5,39], GCS:[8,15] };
+  Object.entries(ranges).forEach(([key, [lo, hi]]) => {
+    const val = p.vitals[key];
+    if (val < lo) divAlerts.push(`<div class="div-alert"><span class="div-icon">▼</span>${key} critically low: ${val?.toFixed(1)}</div>`);
+    else if (val > hi) divAlerts.push(`<div class="div-alert"><span class="div-icon">▲</span>${key} critically high: ${val?.toFixed(1)}</div>`);
+  });
+
+  return `
+    <div class="patient-header-card card animate-in">
+      <div class="ph-id-block">
+        <div class="ph-id">${p.id}</div>
+        <div class="ph-condition">${p.condition.replace(/_/g,' ')}</div>
+        <div class="ph-meta">Age ${p.age} · ${bed.toUpperCase()} · ${p.improving ? '↑ Improving' : '↓ Deteriorating'} · O₂: ${v.on_O2?'Yes':'No'}</div>
+      </div>
+      <div class="ph-scores">
+        ${scores.slice(0,3).map(s=>`<div class="score-block">
+          <div class="score-val" style="color:${s.color}">${s.val}</div>
+          <div class="score-lbl">${s.label}</div>
+        </div>`).join('')}
+      </div>
+      <div class="ph-dps-block">
+        <div class="ph-dps-val" style="color:${dpsCol}">${dps.toFixed(1)}</div>
+        <div class="ph-dps-lbl">DPS Score</div>
+        <div class="ph-sev-badge sev-${p.severity}">${dpsLabel(dps)}</div>
+      </div>
+    </div>
+
+    <div class="card vitals-card">
+      <div class="card-title"><div class="card-title-dot" style="background:var(--cyan)"></div>Live Vitals</div>
+      <div class="vitals-grid">${vitalHTML}</div>
+      ${divAlerts.length > 0 ? '<div style="margin-top:12px">'+divAlerts.join('')+'</div>' : ''}
+    </div>
+
+    <div class="card scores-card">
+      <div class="card-title"><div class="card-title-dot" style="background:var(--purple)"></div>Clinical Scores</div>
+      <div class="scores-bars">${scoresHTML}</div>
+    </div>`;
+}
+
+function renderDetailLabs(p) {
+  const l = p.labs; const obs = p.nurse_obs;
+  const labItems = [
+    { name:'Troponin', val: l.troponin?.toFixed(2), unit:'ng/L', hi: l.troponin > 1.0 },
+    { name:'Creatinine', val: l.creatinine?.toFixed(2), unit:'mg/dL', hi: l.creatinine > 1.2 },
+    { name:'Lactate', val: l.lactate?.toFixed(2), unit:'mmol/L', hi: l.lactate > 2.0 },
+    { name:'Platelets', val: l.platelets?.toFixed(0), unit:'×10⁹/L', lo: l.platelets < 150 },
+    { name:'WBC', val: l.WBC?.toFixed(1), unit:'×10⁹/L', hi: l.WBC > 11 },
+    { name:'Bilirubin', val: l.bilirubin?.toFixed(2), unit:'mg/dL', hi: l.bilirubin > 1.2 },
+  ];
+
+  const dps = p.scores.dps || 0;
+  const dpsCol = dpsColor(dps);
+
+  return `
+    <div class="patient-header-card card animate-in">
+      <div class="ph-id-block">
+        <div class="ph-id">${p.id}</div>
+        <div class="ph-condition">${p.condition.replace(/_/g,' ')}</div>
+        <div class="ph-meta">Age ${p.age} · Labs & Observations</div>
+      </div>
+      <div class="ph-dps-block">
+        <div class="ph-dps-val" style="color:${dpsCol}">${dps.toFixed(1)}</div>
+        <div class="ph-dps-lbl">DPS Score</div>
+        <div class="ph-sev-badge sev-${p.severity}">${dpsLabel(dps)}</div>
+      </div>
+    </div>
+
+    <div class="card" style="grid-column:1/3">
+      <div class="card-title"><div class="card-title-dot" style="background:var(--amber)"></div>Laboratory Results</div>
+      <div class="labs-grid">${labItems.map(lab=>`
+        <div class="lab-item">
+          <div class="lab-name">${lab.name}</div>
+          <div class="lab-val" style="color:${lab.hi||lab.lo?'var(--amber)':'var(--green)'}">${lab.val} <span style="font-size:10px;color:var(--text3)">${lab.unit}</span></div>
+        </div>`).join('')}
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><div class="card-title-dot" style="background:var(--cyan)"></div>Nurse Observations</div>
+      <div class="obs-grid">
+        <div class="obs-item"><div class="obs-label">Pain Score</div><div class="obs-val">${obs.pain_score}/10</div></div>
+        <div class="obs-item"><div class="obs-label">Consciousness</div><div class="obs-val">${obs.consciousness}</div></div>
+        <div class="obs-item"><div class="obs-label">Urine Output</div><div class="obs-val">${obs.urine_output_ml} mL/hr</div></div>
+        <div class="obs-item"><div class="obs-label">Skin Color</div><div class="obs-val">${obs.skin_color}</div></div>
+        <div class="obs-item"><div class="obs-label">Sweating</div><div class="obs-val">${obs.sweating?'Yes':'No'}</div></div>
+        <div class="obs-item"><div class="obs-label">O₂ Support</div><div class="obs-val">${p.vitals.on_O2?'Yes':'No'}</div></div>
+      </div>
+    </div>`;
+}
+
+function renderDetailHistory(p) {
+  const hist = p.history;
+  const dps = p.scores.dps || 0;
+  const dpsCol = dpsColor(dps);
+
+  return `
+    <div class="patient-header-card card animate-in">
+      <div class="ph-id-block">
+        <div class="ph-id">${p.id}</div>
+        <div class="ph-condition">${p.condition.replace(/_/g,' ')}</div>
+        <div class="ph-meta">Age ${p.age} · Vital Trend History (${hist.length} snapshots)</div>
+      </div>
+      <div class="ph-dps-block">
+        <div class="ph-dps-val" style="color:${dpsCol}">${dps.toFixed(1)}</div>
+        <div class="ph-dps-lbl">DPS Score</div>
+      </div>
+    </div>
+
+    <div class="card timeline-card" style="grid-column:1/-1">
+      <div class="card-title"><div class="card-title-dot" style="background:var(--accent)"></div>DPS Score Over Time</div>
+      <div class="chart-wrap"><canvas id="chart-dps" role="img" aria-label="DPS trend over time"></canvas></div>
+    </div>
+
+    <div class="card" style="grid-column:1/2">
+      <div class="card-title"><div class="card-title-dot" style="background:var(--red)"></div>Heart Rate Trend</div>
+      <div class="chart-wrap" style="height:110px"><canvas id="chart-hr" role="img" aria-label="Heart rate trend"></canvas></div>
+    </div>
+
+    <div class="card" style="grid-column:2/3">
+      <div class="card-title"><div class="card-title-dot" style="background:var(--cyan)"></div>SpO₂ Trend</div>
+      <div class="chart-wrap" style="height:110px"><canvas id="chart-spo2" role="img" aria-label="SpO2 trend"></canvas></div>
+    </div>
+
+    <div class="card" style="grid-column:3/4">
+      <div class="card-title"><div class="card-title-dot" style="background:var(--purple)"></div>NEWS2 Trend</div>
+      <div class="chart-wrap" style="height:110px"><canvas id="chart-news2" role="img" aria-label="NEWS2 score trend"></canvas></div>
+    </div>`;
+}
+
+function renderDetailInfo(p) {
+  const img = p.imaging;
+  const meds = p.medications || [];
+  const dps = p.scores.dps || 0;
+  const dpsCol = dpsColor(dps);
+
+  return `
+    <div class="patient-header-card card animate-in">
+      <div class="ph-id-block">
+        <div class="ph-id">${p.id}</div>
+        <div class="ph-condition">${p.condition.replace(/_/g,' ')}</div>
+        <div class="ph-meta">Age ${p.age} · Imaging & Medications</div>
+      </div>
+      <div class="ph-dps-block">
+        <div class="ph-dps-val" style="color:${dpsCol}">${dps.toFixed(1)}</div>
+        <div class="ph-dps-lbl">DPS Score</div>
+      </div>
+    </div>
+
+    <div class="card" style="grid-column:1/3">
+      <div class="card-title"><div class="card-title-dot" style="background:var(--amber)"></div>Imaging & Investigations</div>
+      <div style="display:flex;gap:12px;margin-bottom:14px">
+        <span style="padding:4px 12px;border-radius:4px;font-size:12px;font-family:'JetBrains Mono';${img.chest_xray?'background:rgba(79,127,255,0.15);border:1px solid rgba(79,127,255,0.3);color:var(--accent)':'background:var(--bg3);border:1px solid var(--border);color:var(--text3)'}">CXR ${img.chest_xray?'✓':'—'}</span>
+        <span style="padding:4px 12px;border-radius:4px;font-size:12px;font-family:'JetBrains Mono';${img.ct_scan?'background:rgba(0,212,200,0.1);border:1px solid rgba(0,212,200,0.25);color:var(--cyan)':'background:var(--bg3);border:1px solid var(--border);color:var(--text3)'}">CT Scan ${img.ct_scan?'✓':'—'}</span>
+        <span style="padding:4px 12px;border-radius:4px;font-size:12px;font-family:'JetBrains Mono';${img.ecg_abnormal?'background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.25);color:var(--red)':'background:var(--bg3);border:1px solid var(--border);color:var(--text3)'}">ECG ${img.ecg_abnormal?'⚠ ABN':'NORMAL'}</span>
+      </div>
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:13px;color:var(--text2);line-height:1.6;font-style:italic">${img.findings}</div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><div class="card-title-dot" style="background:var(--green)"></div>Current Medications</div>
+      <div>${meds.map(m=>`<span class="med-tag">${m}</span>`).join('')||'<span style="color:var(--text3);font-size:13px">No medications recorded</span>'}</div>
+    </div>
+
+    <div class="card" style="grid-column:1/3">
+      <div class="card-title"><div class="card-title-dot" style="background:var(--text3)"></div>Clinical Event Log</div>
+      ${p.events.length ? p.events.slice(-5).reverse().map(e=>`
+        <div class="div-alert" style="border-left-color:var(--amber);margin-bottom:6px">
+          <span style="color:var(--amber)">⚠</span> ${e}
+        </div>`).join('') : '<div style="color:var(--text3);font-size:13px;font-family:JetBrains Mono">No clinical events recorded</div>'}
+    </div>`;
+}
+
+function initCharts(p) {
+  const hist = p.history;
+  const ticks = hist.map((_, i) => `T${String(i+1).padStart(2,'0')}`);
+  const chartOpts = (color, fill) => ({
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { ticks: { color: '#64748b', font: { size: 10 }, maxTicksLimit: 8 }, grid: { color: 'rgba(100,130,255,0.07)' }, border: { color:'rgba(100,130,255,0.1)' } },
+      y: { ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(100,130,255,0.07)' }, border: { color:'rgba(100,130,255,0.1)' } }
+    },
+    animation: { duration: 0 },
+    elements: { point: { radius: 0 }, line: { tension: 0.4 } }
+  });
+
+  if (hist.length < 2) return;
+
+  setTimeout(() => {
+    const dpsCvs = document.getElementById('chart-dps');
+    const hrCvs = document.getElementById('chart-hr');
+    const spo2Cvs = document.getElementById('chart-spo2');
+    const news2Cvs = document.getElementById('chart-news2');
+    if (!dpsCvs) return;
+
+    // Destroy old charts
+    Object.values(vitalCharts).forEach(c => c.destroy());
+    vitalCharts = {};
+
+    const dpsData = hist.map(h => h.scores?.dps || 0);
+    vitalCharts.dps = new Chart(dpsCvs, {
+      type: 'line', data: { labels: ticks, datasets: [{
+        data: dpsData, borderColor: '#4f7fff', backgroundColor: 'rgba(79,127,255,0.08)',
+        fill: true, borderWidth: 2
+      }]}, options: chartOpts('#4f7fff', true)
+    });
+
+    vitalCharts.hr = new Chart(hrCvs, {
+      type: 'line', data: { labels: ticks, datasets: [{
+        data: hist.map(h => h.vitals?.HR?.toFixed(1)), borderColor: '#ef4444',
+        backgroundColor: 'rgba(239,68,68,0.08)', fill: true, borderWidth: 1.5
+      }]}, options: chartOpts('#ef4444')
+    });
+
+    vitalCharts.spo2 = new Chart(spo2Cvs, {
+      type: 'line', data: { labels: ticks, datasets: [{
+        data: hist.map(h => h.vitals?.SpO2?.toFixed(1)), borderColor: '#00d4c8',
+        backgroundColor: 'rgba(0,212,200,0.08)', fill: true, borderWidth: 1.5
+      }]}, options: chartOpts('#00d4c8')
+    });
+
+    vitalCharts.news2 = new Chart(news2Cvs, {
+      type: 'line', data: { labels: ticks, datasets: [{
+        data: hist.map(h => h.scores?.news2?.toFixed(0)), borderColor: '#a78bfa',
+        backgroundColor: 'rgba(167,139,250,0.08)', fill: true, borderWidth: 1.5
+      }]}, options: chartOpts('#a78bfa')
+    });
+  }, 50);
+}
+
+function renderDetail() {
+  const p = patients.find(pt => pt.id === selectedPatientId);
+  if (!p) return;
+  const area = document.getElementById('detail-area');
+
+  if (activeTab === 'vitals') {
+    area.innerHTML = renderDetailVitals(p);
+  } else if (activeTab === 'labs') {
+    area.innerHTML = renderDetailLabs(p);
+  } else if (activeTab === 'history') {
+    area.innerHTML = renderDetailHistory(p);
+    initCharts(p);
+  } else if (activeTab === 'info') {
+    area.innerHTML = renderDetailInfo(p);
+  }
+}
+
+function renderStatusBar() {
+  const counts = { imm:0, urg:0, semi:0, rout:0 };
+  patients.forEach(p => {
+    const dps = p.scores.dps || 0;
+    if (dps >= 75) counts.imm++;
+    else if (dps >= 50) counts.urg++;
+    else if (dps >= 25) counts.semi++;
+    else counts.rout++;
+  });
+  document.getElementById('cnt-imm').textContent = counts.imm;
+  document.getElementById('cnt-urg').textContent = counts.urg;
+  document.getElementById('cnt-semi').textContent = counts.semi;
+  document.getElementById('cnt-rout').textContent = counts.rout;
+  document.getElementById('cnt-dec').textContent = SCHEDULER_DECISIONS.length;
+  document.getElementById('cnt-tick').textContent = tick;
+
+  const mins = (tick % 60).toString().padStart(2,'0');
+  const hrs = Math.floor(tick / 60).toString().padStart(2,'0');
+  document.getElementById('tick-display').textContent = `T${String(tick).padStart(3,'0')}`;
+  document.getElementById('sim-time').textContent = `${hrs}:${mins}`;
+}
+
+function switchTab(tab) {
+  activeTab = tab;
+  document.querySelectorAll('.detail-tab').forEach(t => t.classList.remove('active'));
+  event.currentTarget.classList.add('active');
+  renderDetail();
+}
+
+function selectPatient(id) {
+  selectedPatientId = id;
+  renderPatientList();
+  renderDetail();
+}
+
+// ── SIMULATION LOOP ──
+function simTick() {
+  tick++;
+
+  patients.forEach(p => {
+    const event = tickUpdate(p);
+    p.scores = computeAllScores(p);
+
+    // Push to history (max 60 entries)
+    p.history.push({
+      tick,
+      vitals: { ...p.vitals },
+      scores: { ...p.scores },
+    });
+    if (p.history.length > 60) p.history.shift();
+
+    if (event) CLINICAL_EVENTS.unshift({ tick, event });
+  });
+
+  if (CLINICAL_EVENTS.length > 50) CLINICAL_EVENTS.length = 50;
+
+  schedulerTick(patients, tick);
+
+  renderPatientList();
+  renderResources();
+  renderEvents();
+  renderStatusBar();
+
+  // Only re-render detail if on vitals tab (avoid flicker on charts)
+  if (activeTab === 'vitals' || activeTab === 'labs' || activeTab === 'info') {
+    renderDetail();
+  }
+}
+
+// ── INIT ──
+schedulerTick(patients, 0);
+renderPatientList();
+renderResources();
+renderEvents();
+renderDetail();
+renderStatusBar();
+
+// Select first patient
+if (patients.length > 0) {
+  const sorted = [...patients].sort((a,b) => (b.scores.dps||0) - (a.scores.dps||0));
+  selectedPatientId = sorted[0].id;
+  renderPatientList();
+  renderDetail();
+}
+
+// Run sim at 1 tick / second
+setInterval(simTick, 1200);
+</script>
+</body>
+</html>
